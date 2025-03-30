@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MetaMask Test</title>
+    <style>
+        #status { margin: 20px 0; color: red; }
+        button { padding: 10px 20px; margin: 10px; }
+        button:disabled { opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <h1>MetaMask Test</h1>
+    <div id="status">Initializing...</div>
+    <button id="connect" disabled>Connect</button>
+
+    <script>
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connect');
+        let isProcessing = false;
+
+        // Handle errors and display them
+        function handleError(error) {
+            console.error('MetaMask error:', error);
+            status.style.color = 'red';
+            status.textContent = error.message || 'Unknown error occurred';
+            connectBtn.disabled = false;
+            isProcessing = false;
+        }
+
+        // Update status with success message
+        function updateStatus(message) {
+            status.style.color = 'green';
+            status.textContent = message;
+        }
+
+        // Main connect function
+        async function connect() {
+            if (isProcessing) return;
+            
+            try {
+                isProcessing = true;
+                connectBtn.disabled = true;
+                status.style.color = 'blue';
+                status.textContent = 'Connecting...';
+
+                // Wait for any pending requests to clear
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Check if already connected
+                const accounts = await ethereum.request({ method: 'eth_accounts' });
+                if (accounts && accounts.length > 0) {
+                    updateStatus('Already connected: ' + accounts[0].slice(0,6) + '...' + accounts[0].slice(-4));
+                    return;
+                }
+
+                // Request connection
+                const newAccounts = await ethereum.request({
+                    method: 'eth_requestAccounts'
+                }).catch(error => {
+                    if (error.code === -32002) {
+                        throw new Error('MetaMask is already processing a request. Please check your MetaMask popup.');
+                    }
+                    throw error;
+                });
+
+                if (newAccounts && newAccounts.length > 0) {
+                    updateStatus('Connected: ' + newAccounts[0].slice(0,6) + '...' + newAccounts[0].slice(-4));
+                } else {
+                    throw new Error('No accounts found after connection');
+                }
+
+            } catch (error) {
+                handleError(error);
+            } finally {
+                isProcessing = false;
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            if (typeof window.ethereum === 'undefined') {
+                status.textContent = 'MetaMask not installed';
+                return;
+            }
+
+            connectBtn.disabled = false;
+            status.textContent = 'Ready to connect';
+            
+            // Handle account changes
+            ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    status.style.color = 'red';
+                    status.textContent = 'Disconnected';
+                } else {
+                    updateStatus('Account changed: ' + accounts[0].slice(0,6) + '...' + accounts[0].slice(-4));
+                }
+            });
+
+            // Check if already connected
+            ethereum.request({ method: 'eth_accounts' })
+                .then(accounts => {
+                    if (accounts && accounts.length > 0) {
+                        updateStatus('Already connected: ' + accounts[0].slice(0,6) + '...' + accounts[0].slice(-4));
+                    }
+                })
+                .catch(console.error);
+        });
+
+        // Add click handler
+        connectBtn.addEventListener('click', connect);
+    </script>
+</body>
+</html>
